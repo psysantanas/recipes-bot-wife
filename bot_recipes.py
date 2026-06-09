@@ -62,9 +62,16 @@ def add_to_history(history, meal_type, dish_name):
 # GROQ
 # ============================
 
+# Нам понадобится импортировать httpx (он уже установлен вместе с groq)
+import httpx
+
+
 def ask_groq(prompt):
     try:
-        client = Groq(api_key=GROQ_API_KEY)
+        # Принудительно создаем клиент без использования прокси-переменных
+        http_client = httpx.Client(trust_env=False)
+        client = Groq(api_key=GROQ_API_KEY, http_client=http_client)
+
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
