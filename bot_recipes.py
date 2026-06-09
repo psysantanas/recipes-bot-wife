@@ -1,8 +1,10 @@
 import logging
 import json
 import os
+import asyncio
 from datetime import date
 from groq import Groq
+from aiohttp import web
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
@@ -160,13 +162,49 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text(reply, reply_markup=get_recipe_keyboard())
 
 
+# ============================
+# ВЕБ-СЕРВЕР ДЛЯ RENDER
+# ============================
+
+async def handle_ping(request):
+    """Этот эндпоинт отвечает Render, что наше приложение работает"""
+    return web.Response(text="I am alive and cooking!")
+
+
+async def start_web_server():
+    """Запуск фонового веб-сервера на порту Render"""
+    app_web = web.Application()
+    app_web.router.add_get('/', handle_ping)
+    runner = web.AppRunner(app_web)
+    await runner.setup()
+
+    # Render автоматически передает нужный порт в переменные окружения (PORT)
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"🌐 Фоновый веб-сервер успешно запущен на порту {port}")
+
+
+# ============================
+# ГЛАВНЫЙ ЗАПУСК
+# ============================
+
 def main():
+    # Инициализация Telegram-бота
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_handler))
 
+    # Создаем asyncio loop, чтобы запустить веб-сервер и бота вместе
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    # 1. Сначала запускаем веб-сервер для удержания Render в сети
+    loop.run_until_complete(start_web_server())
+
+    # 2. Запускаем опрос Telegram
     print("❤️ Бот запущен! Жду запросы...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
