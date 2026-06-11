@@ -62,13 +62,11 @@ def add_to_history(history, meal_type, dish_name):
 # GROQ
 # ============================
 
-# Нам понадобится импортировать httpx (он уже установлен вместе с groq)
 import httpx
 
 
 def ask_groq(prompt):
     try:
-        # Принудительно создаем клиент без использования прокси-переменных
         http_client = httpx.Client(trust_env=False)
         client = Groq(api_key=GROQ_API_KEY, http_client=http_client)
 
@@ -94,7 +92,7 @@ def ask_groq(prompt):
 def get_main_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("🍽 Обед"), KeyboardButton("🌙 Ужин")],
-        [KeyboardButton("🍳 Завтрак"), KeyboardButton("🎲 Случайный")],
+        [KeyboardButton("🍳 Завтрак"), KeyboardButton("🥗 Салаты"), KeyboardButton("🎲 Случайный")],
         [KeyboardButton("📋 История"), KeyboardButton("❤️ Избранное")],
     ], resize_keyboard=True)
 
@@ -138,6 +136,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif "завтрак" in lower:
             prompt = "Придумай простой завтрак."
             meal_type = "lunch"
+        elif "салат" in lower:
+            prompt = "Придумай аппетитный и полезный салат."
+            meal_type = "lunch"  # Салаты условно сохраняем в категорию lunch, либо dinner
         elif "история" in lower:
             await update.message.reply_text("📋 История пока в разработке.")
             return
@@ -174,18 +175,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================
 
 async def handle_ping(request):
-    """Этот эндпоинт отвечает Render, что наше приложение работает"""
     return web.Response(text="I am alive and cooking!")
 
 
 async def start_web_server():
-    """Запуск фонового веб-сервера на порту Render"""
     app_web = web.Application()
     app_web.router.add_get('/', handle_ping)
     runner = web.AppRunner(app_web)
     await runner.setup()
 
-    # Render автоматически передает нужный порт в переменные окружения (PORT)
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
@@ -197,21 +195,17 @@ async def start_web_server():
 # ============================
 
 def main():
-    # Инициализация Telegram-бота
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    # Создаем asyncio loop, чтобы запустить веб-сервер и бота вместе
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    # 1. Сначала запускаем веб-сервер для удержания Render в сети
     loop.run_until_complete(start_web_server())
 
-    # 2. Запускаем опрос Telegram
     print("❤️ Бот запущен! Жду запросы...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
